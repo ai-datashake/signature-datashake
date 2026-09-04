@@ -157,7 +157,13 @@
 
 <script>
   const LOGO = "https://lh3.googleusercontent.com/d/18AwxfU50SJx3AF2yCVmSQ0dy_p5PrYTG=w280";
-  const ADDRESS = "16 rue de Bucarest, 75008 Paris, France | 60 Broad St #3502, New York, NY 10004";
+  const GRIS = "#5f6368";
+  const FONT = "Arial,Helvetica,sans-serif";
+  const TAILLE = "13px";
+  const ADDR_FR = "16 rue de Bucarest, 75008 Paris, France";
+  const ADDR_US = "60 Broad St #3502, New York, NY 10004";
+  const MAPS_FR = "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(ADDR_FR);
+  const MAPS_US = "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(ADDR_US);
 
   const $ = id => document.getElementById(id);
 
@@ -165,31 +171,62 @@
     return (s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
   }
 
-  // Construit le tableau HTML de la signature (contenu à coller / télécharger)
+  // Le style texte est repete sur CHAQUE element, rien n'est laisse a l'heritage :
+  // des qu'un client mail reecrit un element (Outlook, detecteurs iOS), l'heritage
+  // saute et l'element repart sur les valeurs par defaut du client.
+  function styleTexte(deco){
+    return 'color:' + GRIS + ';font-family:' + FONT + ';font-size:' + TAILLE + ';line-height:1.35;text-decoration:' + deco + ';';
+  }
+
+  // Lien blinde : la couleur est posee sur le <a> ET sur un <span> a l'interieur.
+  // Outlook (moteur Word) ignore la couleur portee par le <a> lui-meme et applique
+  // celle de son theme, donc du bleu ; seule celle d'un element interne resiste.
+  function lien(href, texte, souligne){
+    const deco = souligne ? 'underline' : 'none';
+    return '<a href="' + esc(href) + '" style="' + styleTexte(deco) + '">' +
+           '<span style="' + styleTexte(deco) + '">' + esc(texte) + '</span></a>';
+  }
+
+  // Numero au format international pour le href tel: "+ 33 (0) 6 12" -> "+33612"
+  function telHref(tel){
+    return 'tel:' + tel.replace(/\(\s*0\s*\)/g, '').replace(/[^\d+]/g, '');
+  }
+
+  // Construit le tableau HTML de la signature (contenu a coller / telecharger)
   function buildSignature(){
-    const nom = esc($("nom").value.trim()) || "Prénom Nom";
-    const titre = esc($("titre").value.trim()) || "Titre";
-    const tel = esc($("tel").value.trim());
+    const nom = $("nom").value.trim() || "Pr\u00e9nom Nom";
+    const titre = $("titre").value.trim() || "Titre";
+    const tel = $("tel").value.trim();
     const linkedin = $("linkedin").value.trim();
 
-    const phoneLine = tel ? ('<div>FR : ' + tel + '</div>') : '';
+    // Le telephone et les adresses postales sont transformes en liens PAR NOUS, meme
+    // si on ne veut pas qu'ils aient l'air cliquables (grisss, pas de soulignement).
+    // Raison : iOS Mail, Gmail mobile et Outlook mobile auto-detectent telephone,
+    // adresse postale et date quand c'est du texte nu, fabriquent leur propre <a>
+    // par-dessus, et lui appliquent LEUR bleu et LEUR police. Un texte deja contenu
+    // dans un <a> n'est plus auto-detecte : c'est le seul contournement qui tienne
+    // en style inline (la regle CSS a[x-apple-data-detectors] serait supprimee par
+    // Gmail au collage dans le champ signature, qui jette toute balise <style>).
+    const phoneLine = tel
+      ? '<div style="' + styleTexte('none') + '">FR : ' + lien(telHref(tel), tel, false) + '</div>'
+      : '';
 
     const linkedinLine = linkedin
-      ? '<div><a href="' + esc(linkedin) + '" style="color:#5f6368;text-decoration:underline;">LinkedIn</a></div>'
+      ? '<div style="' + styleTexte('none') + '">' + lien(linkedin, 'LinkedIn', true) + '</div>'
       : '';
 
     return '' +
-'<table role="presentation" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-family:Arial,Helvetica,sans-serif;">' +
+'<table role="presentation" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-family:' + FONT + ';">' +
 '<tr>' +
 '<td style="vertical-align:middle;padding-right:18px;">' +
 '<img src="' + LOGO + '" width="140" height="22" alt="datashake" style="display:block;width:140px;height:auto;max-width:140px;border:0;">' +
 '</td>' +
 '<td style="vertical-align:middle;border-left:1px solid #b8b8b8;padding-left:18px;">' +
-'<div style="font-size:13px;line-height:1.35;color:#5f6368;">' +
-'<div style="font-size:13px;font-weight:400;color:#5f6368;">' + nom + '</div>' +
-'<div>' + titre + '</div>' +
-'<div><a href="https://datashake.fr" style="color:#5f6368;text-decoration:underline;">datashake.fr</a></div>' +
-'<div>' + ADDRESS + '</div>' +
+'<div style="' + styleTexte('none') + '">' +
+'<div style="' + styleTexte('none') + 'font-weight:400;">' + esc(nom) + '</div>' +
+'<div style="' + styleTexte('none') + '">' + esc(titre) + '</div>' +
+'<div style="' + styleTexte('none') + '">' + lien('https://datashake.fr', 'datashake.fr', true) + '</div>' +
+'<div style="' + styleTexte('none') + '">' + lien(MAPS_FR, ADDR_FR, false) + ' | ' + lien(MAPS_US, ADDR_US, false) + '</div>' +
 phoneLine +
 linkedinLine +
 '</div>' +
@@ -199,7 +236,9 @@ linkedinLine +
   }
 
   function fullHtmlDoc(sig){
-    return '<!DOCTYPE html>\n<html lang="fr">\n<head><meta charset="UTF-8"></head>\n<body style="margin:24px;background:#fff;">\n' + sig + '\n</body>\n</html>\n';
+    return '<!DOCTYPE html>\n<html lang="fr">\n<head><meta charset="UTF-8">\n' +
+      '<meta name="format-detection" content="telephone=no,address=no,email=no,date=no">\n' +
+      '</head>\n<body style="margin:24px;background:#fff;">\n' + sig + '\n</body>\n</html>\n';
   }
 
   function render(){
